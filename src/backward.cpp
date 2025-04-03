@@ -41,7 +41,6 @@ torch::Tensor sigmoid_backward(torch::Tensor& g, torch::Tensor& x) {
     float* Z = z.data_ptr<float>();
 
     // std::vector<std::function<void()>> tasks(num_threads);  // for multithreading
-    // // int batch_per_thread = B / num_threads;
     // int batch_per_thread = (B < num_threads) ? B: B / num_threads;
 
     // for (int i = 0; i < num_threads; ++i) {
@@ -90,7 +89,6 @@ torch::Tensor mmul_left_backward(torch::Tensor& g, torch::Tensor& x) {
     float* Z = z.data_ptr<float>();
 
     // std::vector<std::function<void()>> tasks(num_threads);  // for multithreading
-    // // int batch_per_thread = B / num_threads;
     // int batch_per_thread = (B < num_threads) ? B: B / num_threads;
 
     // for (int i = 0; i < num_threads; ++i) {
@@ -139,7 +137,6 @@ torch::Tensor mmul_right_backward(torch::Tensor& g, torch::Tensor& x) {
     float* Z = z.data_ptr<float>();
 
     // std::vector<std::function<void()>> tasks(num_threads);  // for multithreading
-    // // int batch_per_thread = B / num_threads;
     // int batch_per_thread = (B < num_threads) ? B: B / num_threads;
 
     // for (int i = 0; i < num_threads; ++i) {
@@ -179,7 +176,6 @@ torch::Tensor add_broadcast_backward(torch::Tensor& x) {
     float* Y = y.data_ptr<float>();
 
     // std::vector<std::function<void()>> tasks(num_threads);  // for multithreading
-    // // int batch_per_thread = B / num_threads;
     // int batch_per_thread = (B < num_threads) ? B: B / num_threads;
 
     // for (int i = 0; i < num_threads; ++i) {
@@ -230,7 +226,6 @@ torch::Tensor ce_softmax_mean_backward(
     float* Z = z.data_ptr<float>();
 
     // std::vector<std::function<void()>> tasks(num_threads);  // for multithreading
-    // // int batch_per_thread = B / num_threads;
     // int batch_per_thread = (B < num_threads) ? B: B / num_threads;
 
     // for (int i = 0; i < num_threads; ++i) {
