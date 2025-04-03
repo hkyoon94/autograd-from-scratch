@@ -1,7 +1,7 @@
 ℹ️ *이 레포지토리의 모든 내용물은 본인이 직접 작성한 소스 및 자료들만 포함하고 있습니다. 본인이 작성하지 않은 부분이 조금이라도 포함된 소스는 보관하지 않습니다.*
 
 ---
-## Autograd의 원리를 직접 구현하고 최적화하기
+## [Autograd의 원리를 직접 구현하고 최적화하기](https://github.com/hkyoon94/autograd-from-scratch/blob/main/autograd-from-scratch.ipynb)
 
 ### 프로젝트 개요
 
@@ -17,8 +17,17 @@
 
 3. 2에 더해 VJP를 수행하는 C++ 커널을 직접 작성하는 최적화 실험을 진행해보았습니다.
 
->### 목차
->
+위 순서대로 프로젝트를 진행한 결과, 다음과 같은 결과를 얻을 수 있었습니다.
+
+| 구현 방식 | Backward 총 소요 시간 (1000 iter) | Iteration당 소요 시간 |
+|------------------|-----------------------|------------------------|
+| Jacobi 텐서를 명시적으로 생성해 einsum으로 chain rule 계산 | 301.25 sec | 0.301 sec |
+| einsum을 활용한 VJP 기반 연산 |  0.23 sec | 0.00023 sec |
+| PyTorch Autograd |  0.33 sec | 0.00033 sec |
+| **커스텀 C++ 커널 기반 수동 VJP 연산** |  **0.15 sec** | **0.00015 sec** |
+
+### 프로젝트 목차
+
 >0. 기초 이론 정리
 >
 >1. Chain Rule과 Jacobian Contraction을 직접 이용해 구현하기
