@@ -1,0 +1,10 @@
+__pycache__
+graph
+CMakeFiles
+.clangd
+CMakeCache.txt
+*.cmake
+*.cc
+detect_cuda_compute_capabilities.cu
+main
+*.pt
