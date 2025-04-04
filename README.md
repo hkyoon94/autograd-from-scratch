@@ -26,6 +26,13 @@
 | PyTorch Autograd |  0.33 sec | 0.00033 sec |
 | **커스텀 C++ 커널 기반 수동 VJP 연산** |  **0.15 sec** | **0.00015 sec** |
 
+아래 전략들이 성공적인 최적화를 이룬 것 같습니다:
+
+1. 연산 그래프를 수식적으로 해석하여, 일부 연산을 사전에 결합(fusion)
+    - (예: `softmax → cross-entropy → batch mean`을 하나의 fused backward 연산으로 구현)
+2. VJP 경로를 명시적으로 분리하고, 중복 경로의 gradient 계산을 cache 하여 메모리 접근과 연산량을 줄임
+3. 타일링이 적용되진 않았지만, most-frequent loop를 모두 row-major로 명시적으로 전개한 커스텀 einsum 커널 사용
+
 ---
 ### 프로젝트 목차
 
