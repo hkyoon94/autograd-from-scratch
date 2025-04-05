@@ -138,6 +138,17 @@ class DataLoader:
             yield self.data.x[bi: ei], self.data.y[bi: ei], self.data.y_onehot[bi: ei]
 
 
+def draw_2d_tsne(last_hiddens: torch.Tensor, labels: torch.Tensor) -> None:
+    z = TSNE(n_components=2).fit_transform(last_hiddens.detach().cpu().numpy())
+    fig, ax = plt.subplots()
+    ax: plt.Axes
+    fig.set_size_inches(5, 5)
+    ax.set_title('2D projection of model output',fontsize=12)
+    ax.scatter(z[:, 0], z[:, 1], s=40, c=labels, cmap="Set2")
+    plt.show()
+    plt.close()
+
+
 def visualize_results(
     train_loss: list[float],
     test_loss: list[float],
@@ -173,14 +184,7 @@ def visualize_results(
     plt.show()
     plt.close()
 
-    z = TSNE(n_components=2).fit_transform(last_hiddens.detach().cpu().numpy())
-    fig, ax = plt.subplots()
-    ax: plt.Axes
-    fig.set_size_inches(5, 5)
-    ax.set_title('2D projection of model output',fontsize=12)
-    ax.scatter(z[:, 0], z[:, 1], s=40, c=labels, cmap="Set2")
-    plt.show()
-    plt.close()
+    draw_2d_tsne(last_hiddens, labels)
 
 
 def draw_computational_graph(
