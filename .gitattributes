@@ -1,0 +1,2 @@
+*.ipynb -linguist-detectable
+*Makefile -linguist-detectables

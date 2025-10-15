@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autograd"
+version = "0.1.0"
+description = "Custom, from-scratch Autograd engine with C++/CUDA backend"
+authors = [
+    { name = "Hong-Gyu Yoon" }
+]
+readme = "README.md"
+requires-python = ">=3.12"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["autograd*"]
+exclude = ["autograd.csrc.include"]
+
+[tool.setuptools.package-data]
+autograd = [
+    "lib/*.so",
+    "lib/*.pyi",
+    "csrc/include/*.h"
+]
+
+[tool.setuptools]
+include-package-data = true

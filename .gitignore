@@ -1,0 +1,16 @@
+__pycache__/
+.vscode/
+.pytest*
+*.log
+*.so
+.build/
+.wheel/
+.ptx*/
+*.ptx*
+*.llir
+*.ttir
+*.ttgir
+*.cubin
+*.source
+bench_results/
+runs/

@@ -1,0 +1,20 @@
+CompileFlags:
+  Add:
+    # Current Project
+    - -I/home/honggyu/workspace/ops-prac/llm-bench/autograd-from-scratch/autograd/csrc/include
+  
+    # Python
+    - -I/home/honggyu/miniconda3/envs/ai/include/python3.12
+
+    # Numpy
+    - -I/home/honggyu/miniconda3/envs/ai/lib/python3.12/site-packages/numpy/_core/include
+ 
+    # LibTorch
+    - -I/home/honggyu/miniconda3/envs/ai/lib/python3.12/site-packages/torch/include
+    - -I/home/honggyu/miniconda3/envs/ai/lib/python3.12/site-packages/torch/include/torch/csrc/api/include
+    - -I/home/honggyu/miniconda3/envs/ai/lib/python3.12/site-packages/torch/lib/include
+  
+    # CUDA
+    - -I/usr/local/cuda/include
+    - --cuda-path=/usr/local/cuda
+    - --cuda-gpu-arch=sm_89
