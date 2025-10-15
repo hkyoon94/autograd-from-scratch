@@ -1,3 +1,5 @@
+import itertools
+
 import torch
 import triton
 import triton.language as tl
@@ -69,7 +71,10 @@ def mm_():
         BLOCK_SIZE_K: tl.constexpr,
         GROUP_SIZE_M: tl.constexpr,
     ):
-        """Kernel for computing the matmul C = A x B.
+        """
+        'This code is from Triton official tutorial.'
+
+        Kernel for computing the matmul C = A x B.
         A has shape (M, K), B has shape (K, N) and C has shape (M, N)
         """
         # -----------------------------------------------------------
@@ -131,5 +136,330 @@ def mm_():
         tl.store(c_ptrs, c, mask=c_mask)
 
 
+"""
+def flash_attn_naive(
+    Q: torch.Tensor,
+    K: torch.Tensor,
+    V: torch.Tensor
+) -> torch.Tensor:
+    B, H = Q.shape[0], Q.shape[1]
+    q_len, kv_len = Q.shape[2], K.shape[2]
+    device = Q.device
+
+    O = torch.empty_like(Q)
+
+    for b in range(B):
+        for h in range(H):
+            Tr = triton.cdiv(q_len, Br)
+            Tc = triton.cdiv(kv_len, Bc)
+
+            for i in range(Tr):
+                # loading Q_i panel to SRAM
+                i_off = i * Br
+                Q_i = Q[b, h, i_off: i_off + Br].to(torch.float32)
+
+                O_i_j = torch.zeros((Br, d), dtype=torch.float32, device=device)
+                l_i_j = torch.zeros((Br, ), dtype=torch.float32, device=device)
+                m_i_j = torch.empty((Br, ), dtype=torch.float32, device=device).fill_(-1e12)
+
+                for j in range(Tc):  # block-tiled online-softmax matmul
+                    # loading K_j, V_j to SRAM
+                    j_off = j * Bc
+                    K_j = K[b, h, j_off: j_off + Bc].to(torch.float32)
+                    V_j = V[b, h, j_off: j_off + Bc].to(torch.float32)
+
+                    # computing block partial score
+                    S_i_j = Q_i.mm(K_j.T)  # (Br, Bc)
+
+                    # computing partial-scaled softmax
+                    m_i_j_new = torch.maximum(m_i_j, S_i_j.max(dim=-1)[0])  # (Br,)
+                    P_i_j = torch.exp(S_i_j - m_i_j_new[:, None])           # (Br, Bc)
+                    
+                    # renormalized score-value mm
+                    scale = torch.exp(m_i_j - m_i_j_new)                    # (Br,)
+                    l_i_j = l_i_j.mul(scale) + P_i_j.sum(dim=-1)            # (Br,)
+                    O_i_j = scale[:, None].mul(O_i_j) + P_i_j.mm(V_j)       # (Br,)
+
+                    m_i_j = m_i_j_new
+
+                # writing accumulated output to DRAM
+                O[b, h, i_off: i_off + Br] = (1 / l_i_j)[:, None].mul(O_i_j)
+    return O
+"""
+
+
+def get_cuda_autotune_config():
+    Brs = [256, 128, 64, 32]
+    Bcs = [256, 128, 64, 32]
+    num_stages = [5, 4, 3]
+    num_warps = [8, 4, 2]
+    return list(
+        triton.Config(kwargs={"Br": Br, "Bc": Bc}, num_stages=ns, num_warps=nw)
+        for Br, Bc, ns, nw in itertools.product(Brs, Bcs, num_stages, num_warps)
+    )
+
+
+# @triton.autotune(
+#     configs=get_cuda_autotune_config(),
+#     key=["q_len", "kv_len", "d"],
+# )
+@triton.jit
+def my_flash_attn_kernel(  # TODO: solve when param::d is not a power of 2.
+    Q_ptr, K_ptr, V_ptr, O_ptr,
+    q_len, kv_len,
+    Q_st0, Q_st1, Q_st2, Q_st3,
+    K_st0, K_st1, K_st2, K_st3,
+    V_st0, V_st1, V_st2, V_st3,
+    d: tl.constexpr,
+    is_causal: int,
+    num_kv_groups: int,
+    Br: tl.constexpr,
+    Bc: tl.constexpr,
+):
+    # Parallel grid for each batch, head
+    # Parallel grid for each i * Br: (i+1) * Br segment in sequence length dimension
+    b = tl.program_id(axis=0)
+    h = tl.program_id(axis=1)
+    i = tl.program_id(axis=2)
+
+    tl.assume(h >= 0)
+    tl.assume(i >= 0)
+    tl.assume(Q_st0 >= 0)
+    tl.assume(Q_st1 >= 0)
+    tl.assume(Q_st2 >= 0)
+    tl.assume(Q_st3 >= 0)
+    tl.assume(K_st0 >= 0)
+    tl.assume(K_st1 >= 0)
+    tl.assume(K_st2 >= 0)
+    tl.assume(K_st3 >= 0)
+    tl.assume(V_st0 >= 0)
+    tl.assume(V_st1 >= 0)
+    tl.assume(V_st2 >= 0)
+    tl.assume(V_st3 >= 0)
+    tl.assume(num_kv_groups >= 1)
+
+    # loading Q_i panel to SRAM
+    # same with ~[b, h, i * Br: i * Br + Br, :]
+    # only using 2-dimensional broadcasting will load 4D-tensor as 2D.
+    l_offs = i * Br + tl.arange(0, Br)[:, None]
+    d_offs = tl.arange(0, d)[None, :]
+    Q_i_ptr = Q_ptr + b * Q_st0 + h * Q_st1 + l_offs * Q_st2 + d_offs * Q_st3
+
+    Q_i = tl.load(Q_i_ptr, mask=l_offs < q_len, other=0.0)
+
+    # initializing accumulator tensors in SRAM
+    O_i_j = tl.zeros((Br, d), dtype=tl.float32)
+    l_i_j = tl.zeros((Br,), dtype=tl.float32)
+    m_i_j = tl.full((Br,), -float("inf"), dtype=tl.float32)
+
+    Tc = tl.cdiv(kv_len, Bc)
+    d_inv = 1 / (d ** 0.5)
+
+    # block-tiled online-softmax & matmul V-tile
+    for j in range(Tc):
+        # loading K_j, V_j to SRAM
+        # same with ~[b, h, j * Bc: j * Bc + Bc, :]
+        block_l_offs = j * Bc + tl.arange(0, Bc)[:, None]
+        block_d_offs = tl.arange(0, d)[None, :]
+        K_j_ptr = K_ptr + b * K_st0 + (h // num_kv_groups) * K_st1 + \
+            block_l_offs * K_st2 + block_d_offs * K_st3
+        V_j_ptr = V_ptr + b * V_st0 + (h // num_kv_groups) * V_st1 + \
+            block_l_offs * V_st2 + block_d_offs * V_st3
+        
+        K_j = tl.load(K_j_ptr, mask=block_l_offs < kv_len, other=0.0)  # (Bc, d)
+        V_j = tl.load(V_j_ptr, mask=block_l_offs < kv_len, other=0.0)  # (Bc, d)
+
+        # computing block partial score
+        # equivalent to Q_1 @ K_j^T GEMM
+        # if q_len == 1, then one should call 'single-query optimized kernel' istead of this one.
+        S_i_j = tl.dot(Q_i, tl.trans(K_j), out_dtype=tl.float32) * d_inv  # (Br, d)
+
+        # overflowed i, j-index -inf masking
+        neg_inf = tl.full((Br, Bc), -float("inf"), dtype=tl.float32)  # (Br, Bc)
+        S_i_j = tl.where(j * Bc + tl.arange(0, Bc) < kv_len, S_i_j, neg_inf)  # (Br, Bc)
+        S_i_j = tl.where(l_offs < q_len, S_i_j, neg_inf)  # (Br, Bc)
+
+        if is_causal:
+            S_i_j = tl.where(l_offs >= j * Bc + tl.arange(0, Bc), S_i_j, neg_inf)  # condition i >= j
+
+        # computing partial-scaled softmax
+        S_i_j_rowmax = tl.max(S_i_j, axis=-1)  # (Br,)
+        m_i_j_new = tl.maximum(m_i_j, S_i_j_rowmax)  # (Br,)
+        P_i_j = tl.exp(S_i_j - m_i_j_new[:, None])  # (Br, Bc)
+
+        # renormalized score-value mm
+        scale = tl.exp(m_i_j - m_i_j_new)  # (Br,)
+        l_i_j = scale * l_i_j + tl.sum(P_i_j, axis=-1)  # (Br,)
+        O_i_j = scale[:, None] * O_i_j + tl.dot(  # (Br, Bc) @ (Bc, d) -> (Br, d)
+            P_i_j, tl.cast(V_j, dtype=tl.float32), out_dtype=tl.float32
+        )
+        m_i_j = m_i_j_new
+
+    # writing accumulated output to DRAM
+    out = (1 / l_i_j)[:, None] * O_i_j  # (Br, d)
+    out_ptrs = O_ptr + b * Q_st0 + h * Q_st1 + l_offs * Q_st2 + d_offs * Q_st3
+    tl.store(out_ptrs, out, mask=l_offs < q_len)
+
+
+def get_cuda_autotune_config_2():
+    Bcs = [256, 128, 64, 32, 16]
+    num_stages = [5, 4, 3]
+    num_warps = [8, 4, 2]
+    return list(
+        triton.Config(kwargs={"Bc": Bc}, num_stages=ns, num_warps=nw)
+        for Bc, ns, nw in itertools.product(Bcs, num_stages, num_warps)
+    )
+
+
+# @triton.autotune(
+#     configs=get_cuda_autotune_config_2(),
+#     key=["kv_len", "d"],
+# )
+@triton.jit
+def my_flash_attn_kernel_single_query(  # TODO: solve when param::d is not a power of 2.
+    Q_ptr, K_ptr, V_ptr, O_ptr,
+    kv_len,
+    Q_st0, Q_st1, Q_st2, Q_st3,
+    K_st0, K_st1, K_st2, K_st3,
+    V_st0, V_st1, V_st2, V_st3,
+    d: tl.constexpr,
+    num_kv_groups: tl.constexpr,
+    Bc: tl.constexpr,
+):
+    # Parallel grid for each batch, head
+    # Parallel grid for each i * Br: (i+1) * Br segment in sequence length dimension
+    b = tl.program_id(axis=0)
+    h = tl.program_id(axis=1)
+
+    tl.assume(h >= 0)
+    tl.assume(Q_st0 >= 0)
+    tl.assume(Q_st1 >= 0)
+    tl.assume(Q_st2 >= 0)
+    tl.assume(Q_st3 >= 0)
+    tl.assume(K_st0 >= 0)
+    tl.assume(K_st1 >= 0)
+    tl.assume(K_st2 >= 0)
+    tl.assume(K_st3 >= 0)
+    tl.assume(V_st0 >= 0)
+    tl.assume(V_st1 >= 0)
+    tl.assume(V_st2 >= 0)
+    tl.assume(V_st3 >= 0)
+    tl.assume(num_kv_groups >= 1)
+
+    # loading Q_i panel to SRAM
+    # same with ~[b, h, 0, :]
+    # only using 1-dimensional broadcasting will load 4D-tensor as 1D.
+    d_offs = tl.arange(0, d)
+    Q_i_ptr = Q_ptr + b * Q_st0 + h * Q_st1 + d_offs * Q_st3
+
+    Q_i = tl.load(Q_i_ptr)  # (d,)
+
+    # initializing accumulator tensors in SRAM
+    O_i_j = tl.zeros((d,), dtype=tl.float32)  # (d,)
+    l_i_j = tl.zeros((), dtype=tl.float32)  # ()
+    m_i_j = tl.full((), -1e12, dtype=tl.float32)  # ()
+
+    Tc = tl.cdiv(kv_len, Bc)
+    d_inv = 1 / (d ** 0.5)
+
+    # block-tiled online-softmax & matmul V-tile
+    for j in range(Tc):
+        # loading K_j, V_j to SRAM
+        # same with ~[b, h, j * Bc: j * Bc + Bc, :]
+        block_l_offs =  j * Bc + tl.arange(0, Bc)[:, None]
+        block_d_offs = tl.arange(0, d)[None, :]
+        K_j_ptr = K_ptr + b * K_st0 + (h // num_kv_groups) * K_st1 + \
+            block_l_offs * K_st2 + block_d_offs * K_st3
+        V_j_ptr = V_ptr + b * V_st0 + (h // num_kv_groups) * V_st1 + \
+            block_l_offs * V_st2 + block_d_offs * V_st3
+
+        K_j = tl.load(K_j_ptr, mask=block_l_offs < kv_len, other=0.0)  # (Bc, d)
+        V_j = tl.load(V_j_ptr, mask=block_l_offs < kv_len, other=0.0)  # (Bc, d)
+
+        # computing block partial score
+        # below is equivalent to K_j @ q_i GEMV.
+        S_i_j = tl.sum(Q_i[None, :] * K_j, axis=-1) * d_inv  # (Bc,)
+
+        # overflowed j-index -inf masking
+        neg_inf = tl.full((Bc,), -float("inf"), dtype=tl.float32)  # (Bc,)
+        S_i_j = tl.where(j * Bc + tl.arange(0, Bc) < kv_len, S_i_j, neg_inf)  # (Bc,)
+
+        # computing partial-scaled softmax
+        S_i_j_rowmax = tl.max(S_i_j, axis=-1)  # ()
+        m_i_j_new = tl.maximum(m_i_j, S_i_j_rowmax)  # ()
+        P_i_j = tl.exp(S_i_j - m_i_j_new)  # (Bc,)
+
+        # renormalized score-value mm
+        scale = tl.exp(m_i_j - m_i_j_new)  # ()
+        l_i_j = scale * l_i_j + tl.sum(P_i_j, axis=-1)  # (Bc,)
+        pv = P_i_j[:, None] * tl.cast(V_j, dtype=tl.float32)  # (Bc, 1) * (Bc, d) -> (Bc, d)
+        pv_sum = tl.sum(pv, axis=0)  # (d,)
+        O_i_j = scale * O_i_j + pv_sum  # (d,)
+
+        # # FP32 accumulation
+        # Vj = tl.cast(V_j, tl.float32)
+        # acc = scale * O_i_j
+        # for r in range(Bc):
+        #     w = P_i_j[r]
+        #     acc += Vj[r, :] * w
+        # O_i_j = acc
+
+        m_i_j = m_i_j_new
+
+    # writing accumulated output to DRAM
+    out = (1 / l_i_j) * O_i_j
+    out_ptrs = O_ptr + b * Q_st0 + h * Q_st1 + d_offs * Q_st3
+    tl.store(out_ptrs, out)
+
+
+def my_flash_attn(
+    Q: torch.Tensor,
+    K: torch.Tensor,
+    V: torch.Tensor,
+    is_causal: bool = False,
+    **kwargs,
+) -> tuple[torch.Tensor, torch.Tensor | None]:
+    B, H = Q.shape[0], Q.shape[1]
+    q_len, kv_len = Q.shape[2], K.shape[2]
+    d = Q.shape[-1]
+    num_kv_groups = int(H // K.shape[1])
+
+    O = torch.empty_like(Q)
+
+    if q_len == 1:
+        Bc = 256
+        grid = lambda meta: (B, H,)
+        my_flash_attn_kernel_single_query[grid](  # 2d-grid launching
+            Q, K, V, O,
+            kv_len,
+            Q.stride(0), Q.stride(1), Q.stride(2), Q.stride(3),
+            K.stride(0), K.stride(1), K.stride(2), K.stride(3),
+            V.stride(0), V.stride(1), V.stride(2), V.stride(3),
+            d=d,
+            Bc=Bc,
+            num_kv_groups=num_kv_groups,
+        )
+    else:
+        Br = 16
+        Bc = 64
+        grid = lambda meta: (B, H, triton.cdiv(q_len, Br), )
+        my_flash_attn_kernel[grid](  # 3d-grid launching
+            Q, K, V, O,
+            q_len, kv_len,
+            Q.stride(0), Q.stride(1), Q.stride(2), Q.stride(3),
+            K.stride(0), K.stride(1), K.stride(2), K.stride(3),
+            V.stride(0), V.stride(1), V.stride(2), V.stride(3),
+            d=d,
+            is_causal=is_causal,
+            num_kv_groups=num_kv_groups,
+            Br=Br,
+            Bc=Bc,
+            num_warps=8,
+            num_stages=1,
+        )
+    return O, None
+
+
+# TODO: triton ptx kernel integration is now under dev
 # add_()
 mm_()
