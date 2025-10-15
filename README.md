@@ -4,7 +4,7 @@
 A minimal yet expressive autograd engine built entirely in **C++** with Python bindings,  
 featuring PyTorch-style APIs, graph visualization, and efficient automatic back-propagation.
 
-#### 🔹 Core Features (For details, see: <Demo>)
+#### 🔹 Core Features (For details, see: [DEMO](https://github.com/hkyoon94/autograd-from-scratch/blob/main/demo.ipynb))
 - <img width="2143" height="979" alt="autograd_overview" src="https://github.com/user-attachments/assets/79794606-ae1d-4084-a479-8a7bc33c6181" />
 - Lightweight, **DAG-based Computation Graph** tracking for versatile tensor operations, **including some used forward / backward operators** such as Softmax-Crossentropy reduction.
 - **Shape-aware Computation Graph visualization** via `Graphviz`
