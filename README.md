@@ -1,4 +1,4 @@
-<img width="2143" height="979" alt="autograd_overview" src="https://github.com/user-attachments/assets/2cbd66cd-21b2-40eb-9a67-4dbb21e7c57e" />### `autograd`: “Lightweight Autograd Engine with Visualized Computation Graph and Automatic Backpropagation”
+### `autograd`: “Lightweight Autograd Engine with Visualized Computation Graph and Automatic Backpropagation”
 
 #### 🔹 Overview
 A minimal yet expressive autograd engine built entirely in **C++** with Python bindings,  
