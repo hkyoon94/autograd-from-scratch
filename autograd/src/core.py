@@ -5,6 +5,7 @@ import functools
 import re
 from array import array
 from collections import Counter
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Callable, Dict, TypeVar
 
@@ -192,6 +193,7 @@ class AutogradEngine:
     _active_patches: list[ActivePatch] = ActivePatches()
     _hooks_registry: dict[str, FunctionHook] = FunctionHookRegistry(name="Autograd")
     _graph = ComputationalGraph()
+    _graphs: list[ComputationalGraph] = []
     _counter: Counter = Counter()
 
     @classmethod
@@ -318,14 +320,6 @@ class AutogradEngine:
         cls._on = False
 
     @classmethod
-    def reset(cls) -> None:
-        cls.off()
-        cls.set_track_graph(False)
-        cls.on()
-        if cls._track_graph:
-            cls.set_track_graph(True)
-
-    @classmethod
     def set_track_graph(cls, flag: bool) -> None:
         cls._track_graph = flag
         _C.AutogradEngine.track_graph(flag)
@@ -342,6 +336,14 @@ class AutogradEngine:
                 cls._graph._G.add_edge(n1, n2, name=edge_name)
             # TODO: use input 'root' tensor for graph root
         return cls._graph
+
+    @classmethod
+    def finish_graph(cls) -> None:
+        curr_graph = ComputationalGraph()
+        curr_graph._G = deepcopy(cls.get_computation_graph()._G)
+        cls._graphs.append(curr_graph)
+        cls._graph.clear()
+        _C.AutogradEngine.clear_graph()
 
     @classmethod
     def draw_computation_graph(cls, root: PyTensor | _C.Tensor = None):
@@ -361,12 +363,3 @@ class AutogradEngine:
         def __exit__(self, *args: object) -> None:
             AutogradEngine.on()
             _C.AutogradEngine.on(True)
-
-    class _track_graph:
-        def __enter__(self) -> None:
-            AutogradEngine._track_graph = True
-            _C.AutogradEngine.track_graph(True)
-        
-        def __exit__(self) -> None:
-            AutogradEngine._track_graph = False
-            _C.AutogradEngine.track_graph(False)

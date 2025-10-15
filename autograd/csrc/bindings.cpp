@@ -127,7 +127,8 @@ PYBIND11_MODULE(_C, m) {
     py::class_<AutogradEngine>(m, "AutogradEngine")
         .def_static("on", &AutogradEngine::on)
         .def_static("track_graph", &AutogradEngine::track_graph)
-        .def_static("get_graph", &AutogradEngine::get_graph);
+        .def_static("get_graph", &AutogradEngine::get_graph)
+        .def_static("clear_graph", &AutogradEngine::clear_graph);
 
 
     // Optimizers

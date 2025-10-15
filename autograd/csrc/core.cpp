@@ -361,6 +361,10 @@ ComputationalGraph AutogradEngine::get_graph() {
     return AutogradEngine::graph_;
 }
 
+void AutogradEngine::clear_graph() {
+    AutogradEngine::graph_.edges.clear();
+}
+
 /* Below implementation is exactly-same as following Python implementation:
 
 @classmethod
@@ -449,5 +453,5 @@ void AutogradEngine::backward(
         }
     }
     DEBUG("[Autograd] Backward process finished");
-    AutogradEngine::graph_.edges.clear();
+    AutogradEngine::clear_graph();
 }

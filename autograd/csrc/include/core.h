@@ -238,6 +238,7 @@ class AutogradEngine {
         static void on(bool flag);  // AutogradEngine::on setter
         static void track_graph(bool flag);  // AutogradEngine::track_graph setter
         static ComputationalGraph get_graph();
+        static void clear_graph();
 
         static void backward(
             const TensorPtr& root,
