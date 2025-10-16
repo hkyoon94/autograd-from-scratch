@@ -120,17 +120,47 @@ class FunctionHookRegistry(Dict[str, FunctionHook]):
     
 
 class ComputationalGraph:
-    def __init__(self):
+    def __init__(self, graph: nx.DiGraph | None = None):
         # self.nodes: list[NodeLike] = []
-        self._G: nx.DiGraph = None
+        self._G = graph
+
+    @property
+    def nodes(self) -> list:
+        return self._G.nodes
     
     @property
-    def edges(self) -> nx.DiGraph.edges:
+    def edges(self) -> list:
         return self._G.edges
+    
+    @property
+    def num_nodes(self) -> int:
+        return len(self.nodes)
+
+    @property
+    def num_edges(self) -> int:
+        return len(self.edges)
 
     def add_edge(self, c: NodeLike, p: NodeLike, name="") -> None:
         # forward oriented DiGraph, so parent -> node when visualizing
         self._G.add_edge(p._name, c._name, name=name)
+
+    def fuse(self) -> ComputationalGraph:
+        from autograd.src.fusion import GraphFuser
+
+        G = self._G.copy()
+        G = GraphFuser.fuse(G)
+        new_graph = ComputationalGraph(G)
+        print(f"Number of nodes: {self.num_nodes} -> {new_graph.num_nodes}")
+        print(f"Number of edges: {self.num_edges} -> {new_graph.num_edges}")
+        print(
+            "Forward graph optimization ratio: "
+            f"{self.num_nodes / new_graph.num_nodes * 100:.2f}%"
+        )
+        print(
+            "Backward graph optimization ratio: "
+            f"{self.num_edges / new_graph.num_edges * 100:.2f}%"
+        )
+        return ComputationalGraph(G)
 
     def clear(self) -> None:
         if self._G is not None:
@@ -141,12 +171,13 @@ class ComputationalGraph:
 
     def draw(self) -> SVG:
         """ Using Graphviz 'dot' engine to draw a computation graph. """
-        # TODO: support graph save path argument
+        # TODO: support 'save_graph' path argument
 
         G: nx.DiGraph = self._G
         for n in G.nodes:
             n: str
-            name = re.sub(r"_[0-9]+$", "", n)
+            # stripping ptr ids for fused nodes
+            name = "+".join(re.sub(r"_[0-9]+$", "", n_) for n_ in n.split("+"))
             if n.startswith("Param_"):  # Param leaf Tensors
                 shape, fill = "ellipse", "#A5D6A7"
             elif n.startswith("Non-Param_"):  # Non-param leaf Tensors
@@ -344,6 +375,10 @@ class AutogradEngine:
         cls._graphs.append(curr_graph)
         cls._graph.clear()
         _C.AutogradEngine.clear_graph()
+    
+    @classmethod
+    def clear_graph(cls) -> None:
+        cls._graph.clear()
 
     @classmethod
     def draw_computation_graph(cls, root: PyTensor | _C.Tensor = None):

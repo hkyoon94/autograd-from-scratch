@@ -92,7 +92,7 @@ class Sigmoid : public Function {
 
 class LeakyRelu : public Function {
     public:
-        const std::string _name_ = "leky_relu";
+        const std::string _name_ = "leaky_relu";
         std:: string name() const override;
         TensorPtr forward(const TensorPtrVec& inputs);
         TensorPtrVec backward(const TensorPtr& grad) const override;
