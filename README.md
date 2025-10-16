@@ -42,12 +42,11 @@ A minimal yet expressive autograd engine built entirely in **C++** with Python b
    - <span style="color: red;">[* NOTE]</span>: This benchmark uses small tensor workloads (≤64×64), where framework-level overhead becomes the dominant factor. The result demonstrates the lightweight design efficiency of the custom C++ autograd engine.
 
    - **Environment**
-      - OS: Ubuntu 24.04.3 LTS (Linux)
-      - Build: Clang 18.1.3 (C++17 standard) / NVCC 12.8.61 / Pybind11 v3.0.1
-      - Python: 3.12.11
-      - PyTorch: 2.8.0
-      - CPU: Intel Core i7-14700KF
-      - RAM: 32 GB DDR5
+      - OS: `Ubuntu 24.04.3 LTS (Linux)`
+      - Built with: `Clang 18.1.3 (C++17 standard) / NVCC 12.8.61 / Pybind11 v3.0.1 / Python 3.12.11`
+      - PyTorch: `2.8.0`
+      - CPU: `Intel Core i7-14700KF`
+      - RAM: `32 GB DDR5`
 
    #### 📈 Benchmark Results Summary
    | Framework | #Params | Accuracy | Forward total | Backward total | Speedup |
