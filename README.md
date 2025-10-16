@@ -6,8 +6,8 @@ featuring PyTorch-style APIs, graph visualization, and efficient automatic back-
 
 <img width="2143" height="979" alt="autograd_overview" src="assets/overview.png" />
 
-#### 🔹 Core Features (For details, see: [DEMO](https://github.com/hkyoon94/autograd-from-scratch/blob/main/demo.ipynb))
-- Lightweight, **DAG-based Computation Graph** tracking for versatile tensor operations, **including some fused forward / backward operators**.
+#### 🔹 Core Features (For details, see: '🧩 Demo Contents' section.)
+- Lightweight, dynamic **DAG-based Computation Graph** tracking for versatile tensor operations, **including some fused forward / backward operators**.
 - **Shape-aware Computation Graph visualization** via `Graphviz`
   - (including explicit visualization of Parameter, and Non-parameter leaf tensors.)
 - **PyTorch-style API**: `Tensor`, `Optimizer`, `autograd.backward()`, also supports `no_grad()` context.
@@ -25,7 +25,7 @@ featuring PyTorch-style APIs, graph visualization, and efficient automatic back-
 
 ---
 
-### 🧩 Contents
+### 🧩 Demo Contents ([DEMO](https://github.com/hkyoon94/autograd-from-scratch/blob/main/demo.ipynb))
 1. **Dynamic Computation Graph Tracking and Visualization**  
    - Tensor shape, and logical branch aware dynamic graph tracking, providing visualized DAGs for arbitrary models.
      - <img src="assets/graph_track_preview.png" />
