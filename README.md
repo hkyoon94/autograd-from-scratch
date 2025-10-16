@@ -4,11 +4,12 @@
 A minimal yet expressive autograd engine built entirely in **C++** with Python bindings,  
 featuring PyTorch-style APIs, graph visualization, and efficient automatic back-propagation.
 
+<img width="2143" height="979" alt="autograd_overview" src="assets/overview.png" />
+
 #### 🔹 Core Features (For details, see: [DEMO](https://github.com/hkyoon94/autograd-from-scratch/blob/main/demo.ipynb))
-- <img width="2143" height="979" alt="autograd_overview" src="https://github.com/user-attachments/assets/79794606-ae1d-4084-a479-8a7bc33c6181" />
-- Lightweight, **DAG-based Computation Graph** tracking for versatile tensor operations, **including some used forward / backward operators** such as Softmax-Crossentropy reduction.
+- Lightweight, **DAG-based Computation Graph** tracking for versatile tensor operations, **including some fused forward / backward operators**.
 - **Shape-aware Computation Graph visualization** via `Graphviz`
-  - (including explicit visualization Parameter, and Non-parameter leaf tensors.)
+  - (including explicit visualization of Parameter, and Non-parameter leaf tensors.)
 - **PyTorch-style API**: `Tensor`, `Optimizer`, `autograd.backward()`, also supports `no_grad()` context.
 - **Efficient Topological Backward Traversal** implemented in **C++ backend**
 - **Benchmark:** ~**1.2–1.3× faster than PyTorch for small-model workloads** (See section. #2)
@@ -25,8 +26,9 @@ featuring PyTorch-style APIs, graph visualization, and efficient automatic back-
 ---
 
 ### 🧩 Contents
-1. **Computation Graph Visualization**  
-   - Shape-aware visualized DAG for arbitrary models showing relationships of `Tensor` and `Function` nodes.
+1. **Dynamic Computation Graph Tracking and Visualization**  
+   - Tensor shape, and logical branch aware dynamic graph tracking, providing visualized DAGs for arbitrary models.
+     - <img src="assets/graph_track_preview.png" />
 2. **Training Benchmark**  
    - CPU backend benchmark vs. `PyTorch` showing correctness (accuracy ~0.96) and lower runtime overhead.
    - <span style="color: red;">[* NOTE]</span>: This benchmark uses small tensor workloads (≤64×64), where framework-level overhead becomes the dominant factor. The result demonstrates the lightweight design efficiency of the custom C++ autograd engine.
