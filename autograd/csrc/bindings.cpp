@@ -5,14 +5,15 @@
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 
-#include "allocator.h"
-#include "core.h"
-// #include "dispatch.h"  // TODO: currently under development
-#include "functional.h"
-#include "ops_c.h"
-#include "ops_common.h"
-// #include "ops_cuda.h"  // TODO: currently under development
-#include "optimizer.h"
+#include "allocator/pool.h"
+// #include "dispatcher/dispatcher.h"  // TODO: currently under development
+#include "function/function.h"
+#include "engine/backward.h"
+#include "ops/cpu/ops.h"
+#include "ops/ops_common.h"
+// #include "ops/cuda/ops.h"  // TODO: currently under development
+#include "optimizer/sgd.h"
+#include "tensor/tensor.h"
 
 namespace py = pybind11;
 

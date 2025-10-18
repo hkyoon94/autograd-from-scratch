@@ -5,10 +5,8 @@
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 
-#include "core.h"
-#include "dispatch.h"
-#include "ops_c.h"
-
+#include "dispatcher/dispatcher.h"
+#include "tensor/tensor.h"
 
 using str = std::string;
 using TensorPtr = std::shared_ptr<Tensor>;

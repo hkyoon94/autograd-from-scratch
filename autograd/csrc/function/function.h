@@ -4,7 +4,7 @@
 #include <memory>
 #include <vector>
 
-#include "functional.h"
+#include "function/function.h"
 
 class Tensor;
 

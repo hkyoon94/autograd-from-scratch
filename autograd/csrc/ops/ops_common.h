@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "core.h"
+#include "tensor/tensor.h"
 
 
 inline std::vector<size_t> _broadcast_shapes(

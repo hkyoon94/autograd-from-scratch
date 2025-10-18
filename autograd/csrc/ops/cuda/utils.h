@@ -1,6 +1,12 @@
 #pragma once
 
-#include "core.h"
+#include <iostream>
+#include <memory>
+
+#include "tensor/tensor.h"
+#include "utils/utils.h"
+
+using TensorPtr = std::shared_ptr<Tensor>;
 
 
 /* CUDA kernel status checker for cuda-runtime API */
@@ -69,12 +75,3 @@
 #define CLEANSE_CUDA_DRIVER_CONTEXT() \
     cuModuleUnload(module); \
     cuCtxDestroy(context);
-
-
-namespace cuop {
-
-    TensorPtr add(TensorPtr& a, TensorPtr& b);
-    TensorPtr mm(TensorPtr& a, TensorPtr& b);
-    TensorPtr mm2(TensorPtr& a, TensorPtr& b, string kernel);
-
-}

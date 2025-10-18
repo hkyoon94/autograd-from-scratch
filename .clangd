@@ -1,7 +1,7 @@
 CompileFlags:
   Add:
     # Current Project
-    - -I/home/honggyu/workspace/ops-prac/llm-bench/autograd-from-scratch/autograd/csrc/include
+    - -I/home/honggyu/workspace/ops-prac/llm-bench/autograd-from-scratch/autograd/csrc
   
     # Python
     - -I/home/honggyu/miniconda3/envs/ai/include/python3.12

@@ -75,11 +75,11 @@ __global__ void mmul_tiled(
 #endif
 
 #include <cublas_v2.h>
+#include <vector>
 
-#include "core.h"
-#include "ops_c.h"
-#include "ops_cuda.h"
-#include "utils.h"
+#include "tensor/tensor.h"
+#include "ops/cuda/ops.h"
+#include "utils/utils.h"
 
 // SETUP_PTX_KERNEL(add);
 // SETUP_PTX_KERNEL(mm);  // TODO: Check triton kernel integration
@@ -192,12 +192,12 @@ TensorPtr mm(TensorPtr& a, TensorPtr& b) {
 
 
 // TODO: only for testing
-TensorPtr mm2(TensorPtr& a, TensorPtr& b, string kernel) {
+TensorPtr mm2(TensorPtr& a, TensorPtr& b, std::string kernel) {
     size_t M = a->shape_[0];
     size_t N = b->shape_[1];
     size_t K = a->shape_[1];
 
-    TensorPtr c = Tensor::create(vector{M, N}, 0.0f);
+    TensorPtr c = Tensor::create(std::vector{M, N}, 0.0f);
 
     const float* ptr_a = a->data<const float>();
     const float* ptr_b = b->data<const float>();

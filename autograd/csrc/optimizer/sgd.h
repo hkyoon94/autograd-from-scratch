@@ -1,10 +1,14 @@
+#pragma once
+
 #include <alloca.h>
 #include <memory>
 #include <stdexcept>
 
-#include "allocator.h"
-#include "core.h"
-#include "ops_c.h"
+#include "allocator/pool.h"
+#include "tensor/tensor.h"
+#include "ops/cpu/ops.h"
+#include "utils/utils.h"
+
 
 constexpr size_t PARALLEL_THRESHOLD = 16;
 
@@ -45,7 +49,7 @@ class Optimizer {
         }
 
     public:
-        string _name_;
+        std::string _name_;
         TensorPtrVec params_;
         size_t num_param_tensors_;
         float lr_;

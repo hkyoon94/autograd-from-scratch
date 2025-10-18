@@ -5,7 +5,7 @@
 #include <variant>
 #include <vector>
 
-#include "core.h"
+#include "tensor/tensor.h"
 
 
 using TensorPtr = std::shared_ptr<Tensor>;

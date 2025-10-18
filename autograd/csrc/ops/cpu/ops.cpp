@@ -1,12 +1,11 @@
-#include "ops_c.h"
 #include <cstdlib>
 #include <cstddef>
 #include <random>
 #include <vector>
 
-#include "core.h"
-#include "ops_common.h"
-#include "utils.h"
+#include "tensor/tensor.h"
+#include "ops/ops_common.h"
+#include "utils/utils.h"
 
 
 // This machine is i7-14700kf, thus only supports _mm256_

@@ -1,6 +1,6 @@
 #include <stdexcept>
 
-#include "ops_common.h"
+#include "tensor/tensor.h"
 
 
 /************************** Metadata view ops *************************/

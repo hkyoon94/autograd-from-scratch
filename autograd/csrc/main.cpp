@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <vector>
 
 // #include <numpy/arrayobject.h>  // for build test
 // #include <torch/torch.h>  // for build test
@@ -6,11 +7,12 @@
 #include <cuda.h>
 #include <memory>
 
-#include "allocator.h"
-#include "core.h"
-#include "functional.h"
-#include "ops_c.h"
-#include "optimizer.h"
+#include "allocator/pool.h"
+#include "engine/backward.h"
+#include "function/function.h"
+#include "ops/cpu/ops.h"
+#include "optimizer/sgd.h"
+#include "tensor/tensor.h"
 // #include "ops_cuda.h"
 
 
@@ -34,7 +36,7 @@ int main() {
 
     // Proceed chained forward
     TensorPtr x2 = mm_fn.forward({x1, w1});
-    x2 = view_fn.forward({x2}, vector<size_t>{53, 10});
+    x2 = view_fn.forward({x2}, std::vector<size_t>{53, 10});
     TensorPtr x3 = mm_fn.forward({x2, w2});
     TensorPtr x4 = sum_fn.forward({x3}, {0, 1});
     

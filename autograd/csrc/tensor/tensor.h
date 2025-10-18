@@ -17,11 +17,17 @@
 #include <cuda_runtime.h>
 #include <pybind11/numpy.h>
 
-#include "utils.h"
+#include "constants/enums.h"
+#include "function/function.h"
+#include "ops/cuda/utils.h"
+#include "tensor/tensor.h"
+#include "utils/utils.h"
 
-
-using namespace std;
 namespace py = pybind11;
+
+class Tensor;
+using TensorPtr = std::shared_ptr<Tensor>;
+using TensorPtrVec = std::vector<TensorPtr>;
 
 
 inline size_t calc_numel(const std::vector<size_t>& shape) {
@@ -33,6 +39,7 @@ inline size_t calc_numel(const std::vector<size_t>& shape) {
     );
 }
 
+
 // stride computation (row-major oriented)
 inline std::vector<size_t> calc_contiguous_stride(const std::vector<size_t>& shape) {
     std::vector<size_t> stride(shape.size());
@@ -43,10 +50,6 @@ inline std::vector<size_t> calc_contiguous_stride(const std::vector<size_t>& sha
     }
     return stride;
 }
-
-
-enum class DType { FP32, FP64, INT64, BOOL };
-enum class Device { CPU, CUDA };
 
 
 struct DataPtrStorage {
@@ -91,13 +94,11 @@ struct DataPtrStorage {
                     free(this->_data_);
                 else if (this->device_ == Device::CUDA)
                     cudaFree(this->_data_);
-                DEBUG("Tensor data freed: <addr: " << this << ">");
+                DEBUG("Tensor data freed");
             }
         }
 };
 
-
-class Function;
 
 class Tensor : public std::enable_shared_from_this<Tensor> {
     using TensorPtr = std::shared_ptr<Tensor>;
@@ -188,7 +189,7 @@ class Tensor : public std::enable_shared_from_this<Tensor> {
         TensorPtr broadcast_to(const std::vector<size_t>& out_shape) const;
         // TensorPtr slice(const std::vector<size_t>& slice);
         TensorPtr contiguous();
-        void backward(const std::optional<TensorPtr> init_grad = nullopt);
+        void backward(const std::optional<TensorPtr> init_grad = std::nullopt);
         py::array numpy();
         std::optional<float> getelement(py::list slice) const;
         uintptr_t id() const;
@@ -210,64 +211,7 @@ class Tensor : public std::enable_shared_from_this<Tensor> {
         void _replace_ptr(void* new_ptr);
 };
 
-using TensorPtr = std::shared_ptr<Tensor>;
-using TensorPtrVec = std::vector<TensorPtr>;
-using FunctionPtr = std::shared_ptr<Function>;
-
-struct ComputationalGraph {
-    using DirectedEdge = std::tuple<
-        std::string,  // name of parent fn
-        std::string,  // name of child fn
-        std::vector<size_t>  // shape of intermediate tensor
-    >;
-
-    // directed edge: edges_[0] -> edges_[1]
-    Counter<std::string> counter = Counter<std::string>{};
-    std::vector<DirectedEdge> edges = std::vector<DirectedEdge>{};
-
-    void add_edges(const TensorPtrVec& inputs, const FunctionPtr node);
-};
-
-
-class AutogradEngine {
-    public:
-        static bool on_;
-        static bool track_graph_;
-        static ComputationalGraph graph_;
-
-        static void on(bool flag);  // AutogradEngine::on setter
-        static void track_graph(bool flag);  // AutogradEngine::track_graph setter
-        static ComputationalGraph get_graph();
-        static void clear_graph();
-
-        static void backward(
-            const TensorPtr& root,
-            const std::optional<TensorPtr>& gradient = std::nullopt,
-            const bool retain_graph = false
-        );
-};
-
 
 inline std::ostream& operator<<(std::ostream& os, const TensorPtr& t) {
     return os << t->__repr__();
-}
-
-inline std::ostream& operator<<(std::ostream& os, DType dt) {
-    switch (dt) {
-        case DType::FP32: os << "FP32"; break;
-        case DType::FP64: os << "FP64"; break;
-        case DType::INT64: os << "INT64"; break;
-        case DType::BOOL: os << "BOOL"; break;
-        default: os << "UnknownDType"; break;
-    }
-    return os;
-}
-
-inline std::ostream& operator<<(std::ostream& os, Device dev) {
-    switch (dev) {
-        case Device::CPU: os << "CPU"; break;
-        case Device::CUDA: os << "CUDA"; break;
-        default: os << "UnknownDevice"; break;
-    }
-    return os;
 }

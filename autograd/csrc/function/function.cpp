@@ -1,9 +1,9 @@
-#include "functional.h"
-#include "core.h"
-#include "ops_c.h"
-#include "ops_common.h"
-#include "utils.h"
-#include <memory>
+#include "engine/backward.h"
+#include "function/function.h"
+#include "ops/cpu/ops.h"
+#include "ops/ops_common.h"
+#include "tensor/tensor.h"
+#include "utils/utils.h"
 
 
 using TensorPtr = std::shared_ptr<Tensor>;

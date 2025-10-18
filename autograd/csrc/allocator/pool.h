@@ -4,11 +4,12 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
 
-#include "utils.h"
+#include "utils/utils.h"
 
 
 /*  Linear arena memory pool allocator.
