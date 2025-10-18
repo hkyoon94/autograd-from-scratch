@@ -6,20 +6,6 @@
 #   -run: Runs executable after building
 #   -release: Release mode build (nodebug)
 
-# Constants
-BUILD_TYPE="Debug"
-BUILD_SHARED_LIBS=ON
-BUILD_EXE=ON
-EXPORT_COMPILE_COMMANDS=OFF
-BUILD_WHEEL=false
-INSTALL_AND_TEST=false
-
-USE_PYTHON=ON  # can manually turn on/off external lib include & linking
-USE_CUDA=ON
-USE_NUMPY=OFF
-USE_TORCH=OFF
-USE_BLAS=OFF
-
 # --------------------------- >>> PROJECT CONFIGS >>> ---------------------------
 
 export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
@@ -27,29 +13,37 @@ export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 # Project & CXX build configurations
 PROJECT_ROOT=$(pwd)
 PKG_NAME=autograd
-SRC_DIRNAME=${PKG_NAME}/csrc
-INCLUDE_DIRNAME=${PKG_NAME}/csrc/include
-MAIN_FILENAME=${PKG_NAME}/csrc/main.cpp
-PTXGET_PATH=autograd/csrc/triton/ptxget.py
+
+SRC_DIR=${PROJECT_ROOT}/${PKG_NAME}/csrc
+INCLUDE_DIR=${SRC_DIR}
+MAIN_FILENAME=${SRC_DIR}/main.cpp
+PTXGET_PATH=${SRC_DIR}/triton/ptxget.py
 
 LIB_FILENAME=_C  # output shared library filename (_C.so)
 EXE_FILENAME=main  # output executable filename
 BUILD_DIRNAME=.build
 
+USE_PYTHON=ON  # can manually turn on/off external lib include & linking
+USE_CUDA=ON
+USE_NUMPY=OFF
+USE_TORCH=OFF
+USE_BLAS=OFF
+
 # --------------------------- >>> LIBRARY CONFIGS >>> ---------------------------
+
+# Virtual env configuration
+ENV_PATH=${HOME}/miniconda3/envs/ai
 
 # Compiler path configurations
 C_COMPILER=/usr/bin/clang
 CXX_COMPILER=/usr/bin/clang++
 
 # Python configurations
-PYTHON_ENV_PATH=${HOME}/miniconda3/envs/ai
-PYTHON_VER=python3.12
-SITE_PKGS_PATH=${PYTHON_ENV_PATH}/lib/${PYTHON_VER}/site-packages
+PYTHON_VER=3.12
+SITE_PKGS_PATH=${ENV_PATH}/lib/python${PYTHON_VER}/site-packages
 export PYTHONPATH=${PROJECT_ROOT}
 
-PYTHON_LIBRARY=${PYTHON_ENV_PATH}/lib/lib${PYTHON_VER}.so
-PYTHON_INCLUDE_DIR=${PYTHON_ENV_PATH}/include/${PYTHON_VER}
+PYTHON_LIBRARY=${ENV_PATH}/lib/libpython${PYTHON_VER}.so
 PYBIND11_DIR=${SITE_PKGS_PATH}/pybind11/share/cmake/pybind11
 
 # NVCC configurations
@@ -69,7 +63,7 @@ TORCH_CMAKE_PREFIX_PATH=${SITE_PKGS_PATH}/torch/share/cmake
 # BLAS configurations
 # BLAS는 패키지매니저를 통해 제공하지 않기 때문에, 직접 make -> install을 해야함
 # make PREFIX=${BLAS_DIR}를 해야 해당 경로에 lib/과 include/가 생성됨
-BLAS_DIR=/home/honggyu/openblas  # blas configurations
+BLAS_DIR=${BLAS_DIR}/openblas  # blas configurations
 BLAS_LIBRARY=${BLAS_DIR}/lib/libopenblas.so
 BLAS_INCLUDE_DIR=${BLAS_DIR}/include
 
@@ -77,18 +71,33 @@ BLAS_INCLUDE_DIR=${BLAS_DIR}/include
 # ---------------------------- Build & Installing ----------------------------
 
 # Parsing flags
+
+# Constants
+DELETE_BUILD_CACHE=false
+BUILD_TYPE="Debug"
+BUILD_SHARED_LIBS=ON
+BUILD_EXE=ON
+EXPORT_COMPILE_COMMANDS=OFF
+BUILD_WHEEL=false
+INSTALL_AND_TEST=false
+BUILD_TEST_FILES=false
+
 for arg in "$@"; do
     case "$arg" in
-        -new) rm -rf ${BUILD_DIRNAME};;
+        -new) DELETE_BUILD_CACHE=true;;
         -noshared) BUILD_SHARED_LIBS=OFF;;
         -noexe) BUILD_EXE=OFF;;
         -release) BUILD_TYPE="Release";;
         -wheel) BUILD_WHEEL=true;;
         -install) INSTALL_AND_TEST=true;;
+        -t) BUILD_TEST_FILES=true;;
+        *)
+            if ${BUILD_TEST_FILES}; then
+                TEST_FILE=$arg
+            fi
+            ;;
     esac
 done
-
-EXT_SUFFIX=$(python -c "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))")
 
 
 if ${BUILD_WHEEL}; then
@@ -117,17 +126,27 @@ else
     # Compiling & extracting ptx kernels via Triton
     python ${PTXGET_PATH}
 
-    echo "Python shared lib path: ${PYTHON_LIBRARY}"
-    echo "Python include dir path: ${PYTHON_INCLUDE_DIR}"
+    echo "Python .so path: ${PYTHON_LIBRARY}"
+    echo "Python headers path: ${PYTHON_INCLUDE_DIR}"
     echo "Pybind11 CMake prefix path: ${PYBIND11_DIR}"
     echo "Torch CMake prefix path: ${TORCH_CMAKE_PREFIX_PATH}"
     echo "CUDA compiler path: ${CUDA_HOME}"
 
-    # NPROCS=1
-    NPROCS=$(($(nproc) - 2))
+    NPROCS=1
+    # NPROCS=$(($(nproc) - 2))
     echo "***** # Procs for parallel-build: ${NPROCS}"
 
     # --------------------------- <<< CMAKE CONFIGS <<< ---------------------------
+
+    EXT_SUFFIX=$(python -c "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))")
+
+    if ${BUILD_TEST_FILES}; then
+        SRC_DIRNAME=.test
+        BUILD_SHARED_LIBS=OFF
+        MAIN_FILENAME=${PROJECT_ROOT}/${TEST_FILE}
+        EXE_FILENAME=test
+        BUILD_DIRNAME=.build-test
+    fi
 
     CMAKE_ARGS="
         -DPKG_NAME=${PKG_NAME} \
@@ -135,8 +154,8 @@ else
         -DEXT_SUFFIX=${EXT_SUFFIX} \
         -DCMAKE_EXPORT_COMPILE_COMMANDS=${EXPORT_COMPILE_COMMANDS} \
 
-        -DSRC_DIRNAME=${SRC_DIRNAME} \
-        -DINCLUDE_DIRNAME=${INCLUDE_DIRNAME} \
+        -DSRC_DIR=${SRC_DIR} \
+        -DINCLUDE_DIR=${INCLUDE_DIR} \
         
         -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} \
         -DLIB_FILENAME=${LIB_FILENAME} \
@@ -175,11 +194,14 @@ else
     done
     echo "----------------------------------------------------------------------"
 
+    if ${DELETE_BUILD_CACHE}; then
+        rm -rf ${BUILD_DIRNAME}
+    fi
     cmake -S . -B ${BUILD_DIRNAME} ${CMAKE_ARGS}
     cmake --build ${BUILD_DIRNAME} -- -j${NPROCS}
 
-    mv ${BUILD_DIRNAME}/${LIB_FILENAME}*.so ./${PKG_NAME}/lib/
-    echo "Moved output ${BUILD_DIRNAME}/*.so -> ./${PKG_NAME}/lib/*.so"
+    ln -sfn $(realpath ${BUILD_DIRNAME}/${LIB_FILENAME}.*.so) ./${PKG_NAME}/lib/
+    echo "Created symlink ${BUILD_DIRNAME}/*.so -> ./${PKG_NAME}/lib/*.so"
 
     if [ "${BUILD_EXE}" = "ON" ]; then
         echo "Running main executable..."

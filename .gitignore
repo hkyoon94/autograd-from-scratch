@@ -4,7 +4,7 @@ __pycache__/
 .pytest*
 *.log
 *.so
-.build/
+.build*
 .wheel/
 .ptx*/
 *.ptx*

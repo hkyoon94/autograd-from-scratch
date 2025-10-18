@@ -3,9 +3,9 @@
 #include <iostream>
 #include <memory>
 
-#include "tensor/tensor.h"
 #include "utils/utils.h"
 
+class Tensor;
 using TensorPtr = std::shared_ptr<Tensor>;
 
 

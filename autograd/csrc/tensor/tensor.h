@@ -18,7 +18,6 @@
 #include <pybind11/numpy.h>
 
 #include "constants/enums.h"
-#include "function/function.h"
 #include "ops/cuda/utils.h"
 #include "tensor/tensor.h"
 #include "utils/utils.h"
@@ -98,6 +97,9 @@ struct DataPtrStorage {
             }
         }
 };
+
+
+class Function;
 
 
 class Tensor : public std::enable_shared_from_this<Tensor> {

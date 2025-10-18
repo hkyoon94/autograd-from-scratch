@@ -30,9 +30,8 @@ class CompiledKernelExtractor:
 if __name__ == "__main__":
     import os
     import subprocess
-    from glob import glob
 
-    import autograd.csrc.triton.triton_kernels as triton_kernels
+    import triton_kernels
 
     DUMP_DIR = "autograd/csrc/triton/bin"
     os.makedirs(DUMP_DIR, exist_ok=True)
