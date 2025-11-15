@@ -2,6 +2,7 @@
 #include "function/function.h"
 #include "ops/cpu/ops.h"
 #include "ops/ops_common.h"
+#include "pybind11/detail/init.h"
 #include "tensor/tensor.h"
 #include "utils/utils.h"
 
@@ -250,4 +251,43 @@ TensorPtrVec SoftmaxCrossEntropyMean::backward(const TensorPtr& grad) const {
     return {
         op::ce_softmax_mean_backward(grad, ctx_[0], ctx_[1])
     };
+}
+
+
+std::string Conv2d::name() const { return this->_name_; }
+
+TensorPtr Conv2d::forward(
+    const TensorPtrVec& inputs,
+    const std::vector<uint>& s,
+    const std::vector<uint>& d,
+    const std::vector<uint>& p
+) {
+    DEBUG("Performing Conv2d forward");
+    TensorPtr out = op::conv2d(inputs[0], inputs[1], inputs[2], s, d, p);
+
+    // autograd posthook
+    if (AutogradEngine::on_) {
+        auto new_node = Function::create<Conv2d>();
+        if (AutogradEngine::track_graph_) {
+            AutogradEngine::graph_.add_edges(inputs, new_node);
+        }
+        new_node->parents_ = {inputs[0], inputs[1], inputs[2]};  // navigating parent tensor
+        new_node->original_dim_ = {  // TODO: context enhancement...
+            s[0], s[1], d[0], d[1], p[0], p[1],
+        };
+        out->grad_fn_ = new_node;  // setting grad_fn
+        DEBUG("out.requires_grad: " << out->requires_grad_);
+        DEBUG("out.grad_fn" << out->grad_fn_);
+    }
+    return out;
+}
+
+TensorPtrVec Conv2d::backward(const TensorPtr& grad) const {
+    auto x = parents_[0];
+    auto w = parents_[1];
+    std::vector<uint> ctx = {};
+    for (uint p : original_dim_) {
+        ctx.push_back(p);
+    }
+    return op::conv2d_backward(grad, x, w, ctx);
 }

@@ -222,7 +222,7 @@ if __name__ == "__main__":
     import inspect
     from typing import Callable
 
-    from src.core.dynamic import (
+    from autograd.src.dynamic import (
         ActivePatch,
         FunctionPatchFailError,
         FunctionSpec,

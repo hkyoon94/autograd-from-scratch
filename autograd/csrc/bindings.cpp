@@ -118,7 +118,11 @@ PYBIND11_MODULE(_C, m) {
     )   .def(py::init<>())
         .def("forward", &SoftmaxCrossEntropyMean::forward);
 
+    py::class_<Conv2d, Function, std::shared_ptr<Conv2d>>(m, "Conv2d")
+        .def(py::init<>())
+        .def("forward", &Conv2d::forward);
     
+
     // Computational Graph
     py::class_<ComputationalGraph>(m, "ComputationalGraph")
         .def_property_readonly("edges", [](const ComputationalGraph& self) { return self.edges; });
@@ -188,6 +192,9 @@ PYBIND11_MODULE(_C, m) {
     // mm
     m.def("mm", &op::mm);
     m.def("mm_backward", &op::mm_backward);
+    // conv2d
+    m.def("conv2d", &op::conv2d);
+    m.def("conv2d_backward", &op::conv2d_backward);
 
     /* activations */
     // sigmoid

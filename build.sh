@@ -132,8 +132,8 @@ else
     echo "Torch CMake prefix path: ${TORCH_CMAKE_PREFIX_PATH}"
     echo "CUDA compiler path: ${CUDA_HOME}"
 
-    NPROCS=1
-    # NPROCS=$(($(nproc) - 2))
+    # NPROCS=1
+    NPROCS=$(($(nproc) - 2))
     echo "***** # Procs for parallel-build: ${NPROCS}"
 
     # --------------------------- <<< CMAKE CONFIGS <<< ---------------------------

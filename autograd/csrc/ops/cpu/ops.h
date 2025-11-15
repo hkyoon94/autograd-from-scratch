@@ -38,6 +38,15 @@ namespace op {
     // matmul
     TensorPtr mm(const TensorPtr& a, const TensorPtr& b);
     TensorPtrVec mm_backward(const TensorPtr& g, const TensorPtr& a, const TensorPtr& b);
+    // conv2d
+    TensorPtr conv2d(
+        const TensorPtr& x_, const TensorPtr& weight_, const TensorPtr& bias_,
+        const std::vector<uint>& s, const std::vector<uint>& d, const std::vector<uint>& p
+    );
+    TensorPtrVec conv2d_backward(
+        const TensorPtr& g, const TensorPtr& x_, const TensorPtr& weight_,
+        const std::vector<uint>& ctx
+    );
 
     /* Element-wise activations */
     //sigmoid

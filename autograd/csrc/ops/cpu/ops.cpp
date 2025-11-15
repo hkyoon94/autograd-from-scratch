@@ -1,7 +1,10 @@
 #include <cstdlib>
 #include <cstddef>
 #include <random>
+#include <stdexcept>
 #include <vector>
+
+#include <fmt/core.h>
 
 #include "tensor/tensor.h"
 #include "ops/ops_common.h"
@@ -320,10 +323,9 @@ TensorPtr mm(const TensorPtr& a, const TensorPtr& b) {
 }
 
 
-// X: (B, J)
-// Y: (I, J)
+// g: (B, J), B: (I, J) -> g @ B^t: (B, I)
 // -> Z: (B, I)
-// Fast implementation of X @ Y^t.
+// Fast implementation of g @ B^t.
 void _gradA_contiguous(
     const float* X, const float* Y, float* Z,
     size_t Bs, size_t Be, size_t J, size_t I
@@ -339,11 +341,9 @@ void _gradA_contiguous(
         }
     }
 }
-// g: (B, J), x: (I, J) -> grad @ x.T: (B, I)
-// X: (B, J)
-// Y: (B, I)
-// Z: (I, J)
-// Fast implementation of Y^t @ X.
+// g: (B, J), A: (B, I) -> A^t @ g: (I, J)
+// -> Z: (I, J)
+// Fast implementation of A^t @ g.
 // In order to prevent cache miss, we use b -> i -> j loop order.
 void _gradB_contiguous(
     const float* X, const float* Y, float* Z,
@@ -359,7 +359,7 @@ void _gradB_contiguous(
         }
     }
 }
-// grad w.r.t A: g(I, J) @ B(K, J)^T = (I, K)
+// g: (B, J), B: (I, J) -> g @ B^t: (B, I)
 void _gradA_stride (
     const float* G, const size_t* stG,
     const float* B, const size_t* stB,
@@ -379,7 +379,7 @@ void _gradA_stride (
         }
     }
 }
-// grad w.r.t B: A(I, K)^T @ g(I, J) = (K, J)
+// g: (B, J), A: (B, I) -> A^t @ g: (I, J)
 void _gradB_stride(
     const float* G, const size_t* stG,
     const float* A, const size_t* stA,
@@ -654,6 +654,246 @@ TensorPtrVec ce_softmax_mean_backward(
     );
     DEBUG("Result: " << z);
     return {z};
+}
+
+
+void _conv2d_noim2col(
+    const float* x, const float* weight, const float* bias,
+    float* out,
+    size_t x_s0, size_t x_s1, size_t x_s2, size_t x_s3,
+    size_t w_s0, size_t w_s1, size_t w_s2, size_t w_s3,
+    size_t o_s0, size_t o_s1, size_t o_s2, size_t o_s3,
+    size_t bsz, size_t c_in, size_t H_in, size_t W_in,
+    size_t c_out, size_t KH, size_t KW, size_t H_out, size_t W_out,
+    uint sh, uint sw, uint dh, uint dw, int ph, int pw
+) noexcept {
+    for (size_t b = 0; b < bsz; ++b) {
+        for (size_t o = 0; o < c_out; ++o) {
+            float bias_o = bias[o];
+            for (size_t h = 0; h < H_out; ++h) {
+                for (size_t w = 0; w < W_out; ++w) {
+                    float acc = 0.0f;
+                    for (uint c = 0; c < c_in; ++c) {
+                        for (uint kh = 0; kh < KH; ++kh) {
+                            for (uint kw = 0; kw < KW; ++kw) {
+                                int h_ = sh*h + dh*kh - ph;
+                                int w_ = sw*w + dw*kw - pw;
+                                if ((0 <= h_) && (h_ < H_in) && (0 <= w_) && (w_ < W_in)) {
+                                    acc += x[b*x_s0 + c*x_s1 + h_*x_s2 + w_*x_s3]
+                                            * weight[o*w_s0 + c*w_s1 + kh*w_s2 + kw*w_s3];  
+                                }
+                            }
+                        }
+                    }
+                    out[b*o_s0 + o*o_s1 + h*o_s2 + w*o_s3] = acc + bias_o;
+                }
+            }
+        }
+    }
+}
+TensorPtr conv2d(
+    const TensorPtr& x_, const TensorPtr& weight_, const TensorPtr& bias_,
+    const std::vector<uint>& s, const std::vector<uint>& d, const std::vector<uint>& p
+) {
+    TensorPtr x = x_->contiguous();
+    TensorPtr weight = weight_->contiguous();
+    TensorPtr bias = bias_->contiguous();
+
+    if (x->shape_.size() != 4) {
+        THROWF("x must be 4-dimensional.");
+    }
+    if (weight->shape_.size() != 4) {
+        THROWF("weight must be 4-dimensional.");
+    }
+    if (bias->shape_.size() != 1) {
+        THROWF("Bias must be 1-dimensional.");
+    }
+    if (x->shape_[1] != weight_->shape_[1]) {
+        THROWF("in-channel mismatch: i.e., x.shape[1] != weight.shape[1]");
+    }
+    if (bias->shape_[0] != weight_->shape_[0]) {
+        THROWF("size of bias must match weight.shape[0]");
+    }
+
+    size_t x_s0 = x->stride_[0]; size_t bsz = x->shape_[0];
+    size_t x_s1 = x->stride_[1]; size_t c_in = x->shape_[1];
+    size_t x_s2 = x->stride_[2]; size_t H_in = x->shape_[2];
+    size_t x_s3 = x->stride_[3]; size_t W_in = x->shape_[3];
+
+    size_t w_s0 = weight->stride_[0]; size_t c_out = weight->shape_[0]; 
+    size_t w_s1 = weight->stride_[1];
+    size_t w_s2 = weight->stride_[2]; uint KH = weight->shape_[2];
+    size_t w_s3 = weight->stride_[3]; uint KW = weight->shape_[3];
+
+    if (KH == 0 || KW == 0) {
+        THROWF("Kernel size must be >= 1, got KH={}, KW={}", KH, KW);
+    }
+
+    uint sh = s[0]; uint sw = s[1];
+    uint dh = d[0]; uint dw = d[1];
+    uint ph = p[0]; uint pw = p[1];
+
+    if (!((sh > 0) && (sw > 0) && (dh > 0) && (dw > 0))) {
+        THROWF("dilations or strides should be greater than 0.");
+    }
+
+    size_t H_out = (H_in + 2*ph - (KH-1)*dh - 1) / sh + 1;
+    size_t W_out = (W_in + 2*pw - (KW-1)*dw - 1) / sw + 1;
+
+    if ((H_out <= 0) || (W_out <= 0)) {
+        THROWF(
+            "Given inputs yields invalid output sizes, H_out: {}, W_out: {}",
+            H_out, W_out
+        );
+    }
+
+    TensorPtr out = Tensor::create(std::vector{bsz, c_out, H_out, W_out});
+    size_t o_s0 = out->stride_[0];
+    size_t o_s1 = out->stride_[1];
+    size_t o_s2 = out->stride_[2];
+    size_t o_s3 = out->stride_[3];
+
+    _conv2d_noim2col(
+        x->data<const float>(),
+        weight->data<const float>(),
+        bias->data<const float>(),
+        out->data<float>(),
+        x_s0, x_s1, x_s2, x_s3,
+        w_s0, w_s1, w_s2, w_s3,
+        o_s0, o_s1, o_s2, o_s3,
+        bsz, c_in, H_in, W_in, c_out, KH, KW, H_out, W_out,
+        sh, sw, dh, dw, ph, pw
+    );
+    return out;
+}
+
+
+void _conv2d_x_backward(
+    const float* g, const float* weight, float* out,
+    size_t g_s0, size_t g_s1, size_t g_s2, size_t g_s3,
+    size_t w_s0, size_t w_s1, size_t w_s2, size_t w_s3,
+    size_t o_s0, size_t o_s1, size_t o_s2, size_t o_s3,
+    size_t bsz, size_t c_in, size_t H_in, size_t W_in,
+    size_t c_out, size_t KH, size_t KW, size_t H_out, size_t W_out,
+    uint sh, uint sw, uint dh, uint dw, int ph, int pw
+) noexcept {
+    float sh_ = (float)sh;
+    float sw_ = (float)sw;
+    for (size_t b = 0; b < bsz; ++b) {
+        for (size_t c = 0; c < c_in; ++c) {
+            for (size_t h = 0; h < H_in; ++h) {
+                for (size_t w = 0; w < W_in; ++w) {
+                    float acc = 0.0f;
+                    for (size_t o = 0; o < c_out; ++o) {
+                        for (uint kh = 0; kh < KH; ++kh) {
+                            for (uint kw = 0; kw < KW; ++kw) {
+                                float h_ = (float)(h - dh*kh + ph) / sh_;
+                                float w_ = (float)(w - dw*kw + pw) / sw_;
+                                if (
+                                    is_integer(h_, 1e-6) && is_integer(w_, 1e-6)
+                                    && (0 <= h_) && (h_ < H_out) && (0 <= w_) && (w_ < W_out)
+                                ) {
+                                    acc += g[b*g_s0 + o*g_s1 + (int)h_*g_s2 + (int)w_*g_s3]
+                                        * weight[o*w_s0 + c*w_s1 + kh*w_s2 + kw*w_s3];
+                                }
+                            }
+                        }
+                    }
+                    out[b*o_s0 + c*o_s1 + h*o_s2 + w*o_s3] = acc;
+                }
+            }
+        }
+    }
+}
+void _conv2d_weight_backward(
+    const float* g, const float* x, float* out,
+    size_t g_s0, size_t g_s1, size_t g_s2, size_t g_s3,
+    size_t x_s0, size_t x_s1, size_t x_s2, size_t x_s3,
+    size_t o_s0, size_t o_s1, size_t o_s2, size_t o_s3,
+    size_t bsz, size_t c_in, size_t H_in, size_t W_in,
+    size_t c_out, size_t KH, size_t KW, size_t H_out, size_t W_out,
+    uint sh, uint sw, uint dh, uint dw, int ph, int pw
+) noexcept {
+    for (size_t o = 0; o < c_out; ++o) {
+        for (size_t c = 0; c < c_in; ++c) {
+            for (uint kh = 0; kh < KH; ++kh) {
+                for (uint kw = 0; kw < KW; ++kw) {
+                    float acc = 0.0f;
+                    for (size_t b = 0; b < bsz; ++b) {
+                        for (size_t h = 0; h < H_out; ++h) {
+                            for (size_t w = 0; w < W_out; ++w) {
+                                int h_ = sh*h + dh*kh - ph;
+                                int w_ = sw*w + dw*kw - pw;
+                                if ((0 <= h_) && (h_ < H_in) && (0 <= w_) && (w_ < W_in)) {
+                                    acc += g[b*g_s0 + o*g_s1 + h*g_s2 + w*g_s3]
+                                        * x[b*x_s0 + c*x_s1 + h_*x_s2 + w_*x_s3];
+                                }
+                            }
+                        }
+                    }
+                    out[o*o_s0 + c*o_s1 + kh*o_s2 + kw*o_s3] = acc;
+                }
+            }
+        }
+    }
+}
+TensorPtrVec conv2d_backward(
+    const TensorPtr& g, const TensorPtr& x_, const TensorPtr& weight_,
+    const std::vector<uint>& ctx
+) {
+    TensorPtr x = x_->contiguous();
+    TensorPtr weight = weight_->contiguous();
+
+    size_t g_s0 = g->stride_[0];
+    size_t g_s1 = g->stride_[1];
+    size_t g_s2 = g->stride_[2];
+    size_t g_s3 = g->stride_[3];
+    size_t H_out = g->shape_[2]; size_t W_out = g->shape_[3];
+
+    size_t x_s0 = x->stride_[0]; size_t bsz = x->shape_[0];
+    size_t x_s1 = x->stride_[1]; size_t c_in = x->shape_[1];
+    size_t x_s2 = x->stride_[2]; size_t H_in = x->shape_[2];
+    size_t x_s3 = x->stride_[3]; size_t W_in = x->shape_[3];
+
+    size_t w_s0 = weight->stride_[0]; size_t c_out = weight->shape_[0]; 
+    size_t w_s1 = weight->stride_[1];
+    size_t w_s2 = weight->stride_[2]; uint KH = weight->shape_[2];
+    size_t w_s3 = weight->stride_[3]; uint KW = weight->shape_[3];
+
+    uint sh = ctx[0]; uint sw = ctx[1];
+    uint dh = ctx[2]; uint dw = ctx[3];
+    uint ph = ctx[4]; uint pw = ctx[5];
+
+    // computing dConv/dx
+    TensorPtr x_grad = Tensor::create(x->shape_);
+    _conv2d_x_backward(
+        g->data<const float>(),
+        weight->data<const float>(),
+        x_grad->data<float>(),
+        g_s0, g_s1, g_s2, g_s3, w_s0, w_s1, w_s2, w_s3,
+        x_grad->stride_[0], x_grad->stride_[1],
+        x_grad->stride_[2], x_grad->stride_[3],
+        bsz, c_in, H_in, W_in, c_out, KH, KW, H_out, W_out,
+        sh, sw, dh, dw, ph, pw
+    );
+    
+    // computing dConv/dW
+    TensorPtr w_grad = Tensor::create(weight->shape_);
+    _conv2d_weight_backward(
+        g->data<const float>(),
+        x->data<const float>(),
+        w_grad->data<float>(),
+        g_s0, g_s1, g_s2, g_s3, x_s0, x_s1, x_s2, x_s3,
+        w_grad->stride_[0], w_grad->stride_[1],
+        w_grad->stride_[2], w_grad->stride_[3],
+        bsz, c_in, H_in, W_in, c_out, KH, KW, H_out, W_out,
+        sh, sw, dh, dw, ph, pw
+    );
+
+    // computing dConv/db
+    TensorPtr b_grad = op::view(op::sum(g, {0, 2, 3}), {c_out});
+
+    return {x_grad, w_grad, b_grad};
 }
 
 };  // namespace 'op'

@@ -5,7 +5,14 @@
 #include <unordered_map>
 #include <vector>
 
+#include <math.h>
 #include <string.h>
+
+
+inline bool is_integer(float x, double eps) {
+    float r = std::round(x);
+    return std::fabs(x - r) < eps;
+}
 
 
 std::ostream& operator<<(std::ostream& os, const std::vector<size_t>& v);
@@ -30,6 +37,12 @@ struct Counter {
 
 
 #define PTR_ID(ptr) (reinterpret_cast<uintptr_t>(ptr))
+
+
+#define THROWF(...) \
+    do { \
+        throw std::runtime_error(fmt::format(__VA_ARGS__)); \
+    } while (0)
 
 
 #ifndef NDEBUG

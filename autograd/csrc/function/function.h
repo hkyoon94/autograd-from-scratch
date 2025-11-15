@@ -105,3 +105,16 @@ class SoftmaxCrossEntropyMean : public Function {
         TensorPtr forward(const TensorPtrVec& inputs);
         TensorPtrVec backward(const TensorPtr& grad) const override;
 };
+
+class Conv2d : public Function {
+    public:
+        const std::string _name_ = "conv2d";
+        std:: string name() const override;
+        TensorPtr forward(
+            const TensorPtrVec& inputs,
+            const std::vector<uint>& s,
+            const std::vector<uint>& d,
+            const std::vector<uint>& p
+        );
+        TensorPtrVec backward(const TensorPtr& grad) const override;
+};

@@ -12,6 +12,16 @@ else()
 endif()
 
 
+# Fetching external libs
+include(FetchContent)
+FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git  # fmt lib
+    GIT_TAG 11.0.2
+)
+FetchContent_MakeAvailable(fmt)
+
+
 # Finding build-sources
 message(STATUS ">>> SRC_DIRNAME: ${SRC_DIR}")
 
@@ -44,6 +54,7 @@ if (BUILD_SHARED_LIBS)
     set(LIB ${LIB_FILENAME}_impl)
     add_library(${LIB} STATIC ${CPP_SRC_FILES} ${CUDA_SRC_FILES})
     target_link_libraries(${LIB} PUBLIC ${PTX_BINARIES})
+    target_link_libraries(${LIB} PRIVATE fmt::fmt)
     target_link_options(${LIB} PUBLIC -Wl,-z,noexecstack)
     target_include_directories(${LIB} PUBLIC ${INCLUDE_DIR})
     set_target_properties(${LIB_BIND} PROPERTIES PREFIX "" SUFFIX "")
@@ -64,6 +75,7 @@ if (BUILD_EXE)
     target_include_directories(${EXE} PRIVATE ${INCLUDE_DIR})
     if (BUILD_SHARED_LIBS)
         target_link_libraries(${EXE} PRIVATE ${LIB})
+        target_link_libraries(${EXE} PRIVATE fmt::fmt)
     endif()
 endif()
 
@@ -88,7 +100,7 @@ endif()
 
 
 # Debug / Release compile options
-set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -pthread")
+set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -fPIC -pthread")
 set(CMAKE_CXX_FLAGS_RELEASE
     "-DNDEBUG \
     -O3 \
@@ -178,8 +190,8 @@ if (USE_CUDA)
             ${EXE} PROPERTIES CUDA_SEPARABLE_COMPILATION ON
         )  # CUDA 컴파일 설정
     endif()
-    set(CMAKE_CUDA_FLAGS_DEBUG "-G -g -O0 -gencode arch=compute_89,code=sm_89 -Xptxas=-v")
-    set(CMAKE_CUDA_FLAGS_RELEASE "-DNDEBUG -O3 -gencode arch=compute_89,code=sm_89 -Xptxas=-v")
+    set(CMAKE_CUDA_FLAGS_DEBUG "-G -g -O0 -gencode arch=compute_89,code=sm_89 -fPIC -Xptxas=-v")
+    set(CMAKE_CUDA_FLAGS_RELEASE "-DNDEBUG -O3 -gencode arch=compute_89,code=sm_89 -fPIC -Xptxas=-v")
 endif()
 
 

@@ -80,3 +80,8 @@ def test_broadcast_2d_to_3d(m, n, b):
 
 
 # testing Dropout # TODO
+
+
+# testing conv2d
+def test_conv_2d():
+    ...
